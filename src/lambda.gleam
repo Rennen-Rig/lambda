@@ -265,10 +265,14 @@ fn try_reduce_fully_loop(
   }
 }
 
+/// Converts a lambda term to a human-readable string
+///
 pub fn to_string(term: LambdaTerm) -> String {
   to_string_back(term, False)
 }
 
+/// The recursive part of `to_string`
+///
 fn to_string_back(term term: LambdaTerm, was_lambda was_lambda: Bool) -> String {
   case term, was_lambda {
     Application(into:, sub:), _ -> {
@@ -289,6 +293,9 @@ fn to_string_back(term term: LambdaTerm, was_lambda was_lambda: Bool) -> String 
   }
 }
 
+/// Converts an ID to a string, for use in converting lambdas
+/// to strings
+///
 fn id_to_string(id: ID) -> String {
   case id {
     NumericalID(count) -> int.to_string(count)
