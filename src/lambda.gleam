@@ -1,6 +1,7 @@
 import gleam/dict.{type Dict}
 import gleam/int
 import gleam/io
+import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/set.{type Set}
@@ -315,7 +316,53 @@ fn id_to_string(id: ID) -> String {
 pub fn main() -> Nil {
   io.println("Hello from lambda!")
 
-  let lamb3 =
+  let defs = [
+    #(
+      "true",
+      Lambda(
+        id: StringID("x0"),
+        body: Lambda(id: StringID("x1"), body: Variable(StringID("x0"))),
+      ),
+    ),
+    #(
+      "false",
+      Lambda(
+        id: StringID("y0"),
+        body: Lambda(id: StringID("y1"), body: Variable(StringID("y1"))),
+      ),
+    ),
+    #(
+      "not",
+      Lambda(
+        id: StringID("n0"),
+        body: Application(
+          into: Application(
+            into: Variable(StringID("n0")),
+            sub: Variable(StringID("false")),
+          ),
+          sub: Variable(StringID("true")),
+        ),
+      ),
+    ),
+    #(
+      "and",
+      Lambda(
+        id: StringID("z0"),
+        body: Lambda(
+          id: StringID("z1"),
+          body: Application(
+            into: Application(
+              into: Variable(StringID("z0")),
+              sub: Variable(StringID("z1")),
+            ),
+            sub: Variable(StringID("false")),
+          ),
+        ),
+      ),
+    ),
+  ]
+
+  let lamb =
     do_wrap(
       around: Application(
         into: Application(
@@ -327,66 +374,39 @@ pub fn main() -> Nil {
         ),
         sub: Variable(StringID("true")),
       ),
-      with: [
-        #(
-          "and",
-          Lambda(
-            id: StringID("z0"),
-            body: Lambda(
-              id: StringID("z1"),
-              body: Application(
-                into: Application(
-                  into: Variable(StringID("z0")),
-                  sub: Variable(StringID("z1")),
-                ),
-                sub: Variable(StringID("false")),
-              ),
-            ),
-          ),
-        ),
-        #(
-          "not",
-          Lambda(
-            id: StringID("n0"),
-            body: Application(
-              into: Application(
-                into: Variable(StringID("n0")),
-                sub: Variable(StringID("false")),
-              ),
-              sub: Variable(StringID("true")),
-            ),
-          ),
-        ),
-        #(
-          "true",
-          Lambda(
-            id: StringID("x0"),
-            body: Lambda(id: StringID("x1"), body: Variable(StringID("x0"))),
-          ),
-        ),
-        #(
-          "false",
-          Lambda(
-            id: StringID("y0"),
-            body: Lambda(id: StringID("y1"), body: Variable(StringID("y1"))),
-          ),
-        ),
-      ],
+      with: defs,
     )
 
-  lamb3
+  lamb
+  |> try_reduce_fully(None, Both)
+
+  let lamb2 =
+    do_wrap(
+      around: Application(
+        into: Variable(StringID("not")),
+        sub: Variable(StringID("true")),
+      ),
+      with: defs,
+    )
+
+  lamb2
   |> try_reduce_fully(None, Both)
 
   Nil
 }
 
+/// Wraps a lambda term in bindings, so that a term can be defined
+/// and used inside another without manually formatting it
+/// 
 fn do_wrap(
   around term: LambdaTerm,
   with definitions: List(#(String, LambdaTerm)),
 ) -> LambdaTerm {
-  do_wrap_lambdas(term:, lams: definitions)
+  do_wrap_lambdas(term:, lams: list.reverse(definitions))
 }
 
+/// The recursive part of `do_wrap`
+/// 
 fn do_wrap_lambdas(
   term term: LambdaTerm,
   lams lams: List(#(String, LambdaTerm)),

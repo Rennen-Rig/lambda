@@ -27,10 +27,17 @@ pub fn grab_next() -> ID {
   NumericalID(current)
 }
 
+/// Resets the counter use for comparisons. Used so that two terms
+/// can be refactored, so they can be compared regardless of alpha
+/// conversion
+/// 
 pub fn comparison_grabber_reset() -> Nil {
   envoy.unset("comparison_tracker")
 }
 
+/// Gets the next value from the counter for comparisons, and increments
+/// the counter.
+/// 
 pub fn comparison_grab_next() -> ID {
   let current =
     envoy.get("comparison_tracker")
