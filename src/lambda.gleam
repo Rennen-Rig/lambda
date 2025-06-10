@@ -17,6 +17,8 @@ pub type ReductionStrategy {
   Both
 }
 
+/// Try a single reduction step
+///
 pub fn try_reduce_once(
   term: LambdaTerm,
   using strategy: ReductionStrategy,
@@ -24,6 +26,10 @@ pub fn try_reduce_once(
   try_reduce_tree(in: term, strategy:)
 }
 
+/// The back end for reducing terms.
+/// Reducrsively splits terms until an application onto
+/// a lambda is found, then substitutes accordingly
+///
 fn try_reduce_tree(
   in term: LambdaTerm,
   strategy strategy: ReductionStrategy,
@@ -49,78 +55,112 @@ fn try_reduce_tree(
   }
 }
 
+/// Substitutes a term into the body of a lambda,
+/// at every instance of an id matching that of the
+/// lambda.
+///
+///
+/// Worka by first traversing the new term, so thaf
+/// can be alpha-converted more easily.
+///
+/// This happens so there are never any id collisions
+/// if a term appears twice in another
+///
 fn substitute(
   into term: LambdaTerm,
   for id: ID,
   put sub_term: LambdaTerm,
 ) -> LambdaTerm {
-  let refactorer = build_term_refactor(for: sub_term)
-  substitute_search_tree(into: term, search_id: id, sub_term:, refactorer:)
+  let empty_convert_map = build_alpha_convert_map(for: sub_term)
+  substitute_search_tree(
+    into: term,
+    search_id: id,
+    sub_term:,
+    empty_convert_map:,
+  )
 }
 
+/// Finds the variables matching the id to be substituted.
+/// Then performs the substitution
+///
 fn substitute_search_tree(
   into term: LambdaTerm,
   search_id search_id: ID,
   sub_term sub_term: LambdaTerm,
-  refactorer refactorer: Dict(ID, Nil),
+  empty_convert_map empty_convert_map: Dict(ID, Nil),
 ) -> LambdaTerm {
   case term {
     Application(into:, sub:) ->
       Application(
-        into: into |> substitute_search_tree(search_id:, sub_term:, refactorer:),
-        sub: sub |> substitute_search_tree(search_id:, sub_term:, refactorer:),
+        into: into
+          |> substitute_search_tree(search_id:, sub_term:, empty_convert_map:),
+        sub: sub
+          |> substitute_search_tree(search_id:, sub_term:, empty_convert_map:),
       )
     Lambda(id:, body:) ->
       Lambda(
         id:,
-        body: body |> substitute_search_tree(search_id:, sub_term:, refactorer:),
+        body: body
+          |> substitute_search_tree(search_id:, sub_term:, empty_convert_map:),
       )
     Variable(id:) if id == search_id ->
-      sub_term |> use_term_refactor(refactorer)
+      sub_term |> perform_alpha_convert(empty_convert_map)
     Variable(id:) -> Variable(id:)
   }
 }
 
-fn use_term_refactor(
+/// Alpha converts a term, by filling a dictionary of all
+/// terms to alpha convert with new IDs
+///
+fn perform_alpha_convert(
   to term: LambdaTerm,
-  using refactorer: Dict(ID, Nil),
+  using empty_convert_map: Dict(ID, Nil),
 ) -> LambdaTerm {
-  let ready_refactorer =
-    refactorer |> dict.map_values(fn(_, _) { id.grab_next() })
+  let convert_map =
+    empty_convert_map |> dict.map_values(fn(_, _) { id.grab_next() })
+  // fill the map with the next free IDs
 
-  use_term_refactorer_tree(term, ready_refactorer)
+  perform_alpha_convert_back(to: term, convert_map:)
 }
 
-fn use_term_refactorer_tree(
+/// The recursive part of `perform_alpha_convert`
+///
+fn perform_alpha_convert_back(
   to term: LambdaTerm,
-  refactorer refactorer: Dict(ID, ID),
+  convert_map convert_map: Dict(ID, ID),
 ) -> LambdaTerm {
   case term {
     Application(into:, sub:) ->
       Application(
-        into: into |> use_term_refactorer_tree(refactorer:),
-        sub: sub |> use_term_refactorer_tree(refactorer),
+        into: into |> perform_alpha_convert_back(convert_map:),
+        sub: sub |> perform_alpha_convert_back(convert_map:),
       )
     Lambda(id:, body:) ->
-      Lambda(id:, body: body |> use_term_refactorer_tree(refactorer))
-    Variable(id:) -> Variable(dict.get(refactorer, id) |> result.unwrap(or: id))
+      Lambda(id:, body: body |> perform_alpha_convert_back(convert_map:))
+    Variable(id:) ->
+      Variable(id: dict.get(convert_map, id) |> result.unwrap(or: id))
   }
 }
 
-fn build_term_refactor(for term: LambdaTerm) -> Dict(ID, Nil) {
-  build_term_refactor_back(from: term, acc: dict.new())
+/// Builds an empty dictionary of all the variables bound inside
+/// a term. This is used for alpha conversion
+///
+fn build_alpha_convert_map(for term: LambdaTerm) -> Dict(ID, Nil) {
+  build_alpha_convert_map_back(from: term, acc: dict.new())
 }
 
-fn build_term_refactor_back(
+/// The recursive part of `build_alpha_convert_map`
+///
+fn build_alpha_convert_map_back(
   from term: LambdaTerm,
   acc acc: Dict(ID, Nil),
 ) -> Dict(ID, Nil) {
   case term {
     Application(into:, sub:) ->
-      build_term_refactor_back(from: into, acc:)
-      |> build_term_refactor_back(from: sub)
+      build_alpha_convert_map_back(from: into, acc:)
+      |> build_alpha_convert_map_back(from: sub)
     Lambda(id:, body:) ->
-      build_term_refactor_back(
+      build_alpha_convert_map_back(
         from: body,
         acc: acc |> dict.insert(for: id, insert: Nil),
       )
@@ -128,16 +168,25 @@ fn build_term_refactor_back(
   }
 }
 
+/// Checks if two lambda terms can be made the same using only
+/// alpha conversion
 pub fn are_exactly_same(a: LambdaTerm, b: LambdaTerm) -> Bool {
   make_basic(a) == make_basic(b)
 }
 
+/// Alpha converts all the terms in a lambda term so that all
+/// IDs are ordered from 0+
+///
 fn make_basic(term: LambdaTerm) -> LambdaTerm {
   id.comparison_grabber_reset()
 
   make_basic_tree(term, acc: dict.new())
 }
 
+/// The recursive part of `make_basic`.
+/// Works by keeping a dictionary of all tbe bound variables
+/// found so far, and changing variables accordingly.
+///
 fn make_basic_tree(term: LambdaTerm, acc acc: Dict(ID, ID)) -> LambdaTerm {
   case term {
     Application(into:, sub:) -> {
@@ -163,6 +212,9 @@ fn make_basic_tree(term: LambdaTerm, acc acc: Dict(ID, ID)) -> LambdaTerm {
   }
 }
 
+/// Repeatedly tries to beta reduce a term, until it either
+/// runs out of tries or cycles.
+///
 pub fn try_reduce_fully(
   reduce term: LambdaTerm,
   max_tries max_tries: Option(Int),
@@ -176,6 +228,10 @@ pub fn try_reduce_fully(
   )
 }
 
+/// The recursive part or `try_reduce_fully`
+/// Works by storing a set of all the terms that the term was
+/// previously, then checking against thosd to find cycles.
+///
 fn try_reduce_fully_loop(
   term term: LambdaTerm,
   remaining_tries remaining_tries: Option(Int),
