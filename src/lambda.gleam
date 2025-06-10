@@ -314,60 +314,14 @@ fn id_to_string(id: ID) -> String {
 pub fn main() -> Nil {
   io.println("Hello from lambda!")
 
-  let lamb =
-    Application(
-      into: Lambda(id: StringID("a"), body: Variable(id: StringID("a"))),
-      sub: Lambda(id: StringID("b"), body: Variable(id: StringID("b"))),
-    )
-
-  lamb
-  |> to_string
-  |> io.println
-
-  lamb
-  |> try_reduce_fully(None, Both)
-  |> result.unwrap_both
-  |> to_string
-  |> io.println
-
-  let lamb2 =
-    Application(
-      into: Lambda(
-        id: StringID("true"),
-        body: Application(
-          into: Lambda(
-            id: StringID("false"),
-            body: Application(
-              into: Variable(StringID("true")),
-              sub: Variable(StringID("false")),
-            ),
-          ),
-          sub: Lambda(
-            id: StringID("y0"),
-            body: Lambda(id: StringID("y1"), body: Variable(StringID("y1"))),
-          ),
-        ),
-      ),
-      sub: Lambda(
-        id: StringID("x0"),
-        body: Lambda(id: StringID("x1"), body: Variable(StringID("x0"))),
-      ),
-    )
-  lamb2 |> to_string |> io.println
-  lamb2
-  |> try_reduce_fully(None, Both)
-  |> result.unwrap_both
-  |> to_string
-  //|> io.println
-
   let lamb3 =
     do_wrap(
       around: Application(
         into: Application(
           into: Variable(StringID("and")),
-          sub: Variable(StringID("true")),
+          sub: Variable(StringID("false")),
         ),
-        sub: Variable(StringID("false")),
+        sub: Variable(StringID("true")),
       ),
       with: [
         #(
@@ -416,31 +370,21 @@ fn do_wrap(
   around term: LambdaTerm,
   with definitions: List(#(String, LambdaTerm)),
 ) -> LambdaTerm {
-  do_wrap_lambdas(term:, lams: definitions, apps: [])
+  do_wrap_lambdas(term:, lams: definitions)
 }
 
 fn do_wrap_lambdas(
   term term: LambdaTerm,
   lams lams: List(#(String, LambdaTerm)),
-  apps apps: List(LambdaTerm),
 ) -> LambdaTerm {
   case lams {
     [#(str_id, lambda), ..rest] ->
       do_wrap_lambdas(
-        term: Lambda(id: StringID(str_id), body: term),
+        term: Application(
+          into: Lambda(id: StringID(str_id), body: term),
+          sub: lambda,
+        ),
         lams: rest,
-        apps: [lambda, ..apps],
-      )
-    [] -> do_wrap_applications(term:, apps:)
-  }
-}
-
-fn do_wrap_applications(term term: LambdaTerm, apps apps: List(LambdaTerm)) {
-  case apps {
-    [first, ..rest] ->
-      do_wrap_applications(
-        term: Application(into: term, sub: first),
-        apps: rest,
       )
     [] -> term
   }
