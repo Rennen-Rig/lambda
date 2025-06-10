@@ -1,9 +1,11 @@
 import gleam/dict.{type Dict}
+import gleam/int
 import gleam/io
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/set.{type Set}
-import internal/id.{type ID, StringID}
+import gleam/string
+import internal/id.{type ID, NumericalID, StringID}
 
 pub type LambdaTerm {
   Application(into: LambdaTerm, sub: LambdaTerm)
@@ -135,8 +137,11 @@ fn perform_alpha_convert_back(
         into: into |> perform_alpha_convert_back(convert_map:),
         sub: sub |> perform_alpha_convert_back(convert_map:),
       )
-    Lambda(id:, body:) ->
-      Lambda(id:, body: body |> perform_alpha_convert_back(convert_map:))
+
+    Lambda(id:, body:) -> {
+      let assert Ok(new_id) = dict.get(convert_map, id)
+      Lambda(id: new_id, body: body |> perform_alpha_convert_back(convert_map))
+    }
     Variable(id:) ->
       Variable(id: dict.get(convert_map, id) |> result.unwrap(or: id))
   }
@@ -199,14 +204,18 @@ fn make_basic_tree(term: LambdaTerm, acc acc: Dict(ID, ID)) -> LambdaTerm {
       let new_id = id.comparison_grab_next()
       Lambda(
         id: new_id,
-        body: body |> make_basic_tree(acc: acc |> dict.insert(id, new_id)),
+        body: body
+          |> make_basic_tree(acc: acc |> dict.insert(for: id, insert: new_id)),
       )
     }
     Variable(id:) -> {
-      echo id
-      echo acc
       let assert Ok(new_id) = dict.get(acc, id)
-        as "All variables should be bound to a lambda"
+        as {
+        "All variables should be bound to a lambda.\nFound `"
+        <> string.inspect(id)
+        <> "` which was not present in acc:\n"
+        <> string.inspect(acc)
+      }
       Variable(id: new_id)
     }
   }
@@ -238,7 +247,6 @@ fn try_reduce_fully_loop(
   strategy strategy: ReductionStrategy,
   visited visited: Set(LambdaTerm),
 ) -> Result(LambdaTerm, LambdaTerm) {
-  echo term
   case remaining_tries {
     Some(tries) if tries < 0 -> Error(term)
     _ -> {
@@ -257,17 +265,85 @@ fn try_reduce_fully_loop(
   }
 }
 
+pub fn to_string(term: LambdaTerm) -> String {
+  to_string_back(term, False)
+}
+
+fn to_string_back(term term: LambdaTerm, was_lambda was_lambda: Bool) -> String {
+  case term, was_lambda {
+    Application(into:, sub:), _ -> {
+      to_string_back(term: into, was_lambda: False)
+      <> " ("
+      <> to_string_back(term: sub, was_lambda: False)
+      <> ")"
+    }
+    Lambda(id:, body:), False ->
+      "(λ"
+      <> id_to_string(id)
+      <> "."
+      <> to_string_back(term: body, was_lambda: True)
+      <> ")"
+    Lambda(id:, body:), True ->
+      id_to_string(id) <> "." <> to_string_back(term: body, was_lambda: True)
+    Variable(id:), _ -> id_to_string(id)
+  }
+}
+
+fn id_to_string(id: ID) -> String {
+  case id {
+    NumericalID(count) -> int.to_string(count)
+    StringID(name) -> name
+  }
+}
+
 pub fn main() -> Nil {
   io.println("Hello from lambda!")
 
   let lamb =
     Application(
       into: Lambda(id: StringID("a"), body: Variable(id: StringID("a"))),
-      sub: Lambda(id: StringID("b"), body: Variable(StringID("b"))),
+      sub: Lambda(id: StringID("b"), body: Variable(id: StringID("b"))),
     )
 
-  echo lamb
-    |> try_reduce_fully(None, Both)
+  lamb
+  |> to_string
+  |> io.println
+
+  lamb
+  |> try_reduce_fully(None, Both)
+  |> result.unwrap_both
+  |> to_string
+  |> io.println
+
+  let lamb2 =
+    Application(
+      into: Lambda(
+        id: StringID("true"),
+        body: Application(
+          into: Lambda(
+            id: StringID("false"),
+            body: Application(
+              into: Variable(StringID("true")),
+              sub: Variable(StringID("false")),
+            ),
+          ),
+          sub: Lambda(
+            id: StringID("y0"),
+            body: Lambda(id: StringID("y1"), body: Variable(StringID("y1"))),
+          ),
+        ),
+      ),
+      sub: Lambda(
+        id: StringID("x0"),
+        body: Lambda(id: StringID("x1"), body: Variable(StringID("x0"))),
+      ),
+    )
+  lamb2 |> to_string |> io.println
+  lamb2
+  |> try_reduce_fully(None, Both)
+  |> result.unwrap_both
+  |> to_string
+  |> io.println
 
   Nil
 }
