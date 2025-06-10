@@ -247,6 +247,8 @@ fn try_reduce_fully_loop(
   strategy strategy: ReductionStrategy,
   visited visited: Set(LambdaTerm),
 ) -> Result(LambdaTerm, LambdaTerm) {
+  term |> to_string |> io.println
+
   case remaining_tries {
     Some(tries) if tries < 0 -> Error(term)
     _ -> {
@@ -275,18 +277,24 @@ pub fn to_string(term: LambdaTerm) -> String {
 ///
 fn to_string_back(term term: LambdaTerm, was_lambda was_lambda: Bool) -> String {
   case term, was_lambda {
-    Application(into:, sub:), _ -> {
+    Application(into:, sub:), False -> {
       to_string_back(term: into, was_lambda: False)
       <> " ("
       <> to_string_back(term: sub, was_lambda: False)
       <> ")"
     }
+    Application(into:, sub:), True -> {
+      "("
+      <> to_string_back(term: into, was_lambda: False)
+      <> " "
+      <> to_string_back(term: sub, was_lambda: False)
+      <> ")"
+    }
     Lambda(id:, body:), False ->
-      "(λ"
+      "λ"
       <> id_to_string(id)
       <> "."
       <> to_string_back(term: body, was_lambda: True)
-      <> ")"
     Lambda(id:, body:), True ->
       id_to_string(id) <> "." <> to_string_back(term: body, was_lambda: True)
     Variable(id:), _ -> id_to_string(id)
@@ -350,7 +358,90 @@ pub fn main() -> Nil {
   |> try_reduce_fully(None, Both)
   |> result.unwrap_both
   |> to_string
-  |> io.println
+  //|> io.println
+
+  let lamb3 =
+    do_wrap(
+      around: Application(
+        into: Application(
+          into: Variable(StringID("and")),
+          sub: Variable(StringID("true")),
+        ),
+        sub: Variable(StringID("false")),
+      ),
+      with: [
+        #(
+          "and",
+          Lambda(
+            id: StringID("z0"),
+            body: Lambda(
+              id: StringID("z1"),
+              body: Application(
+                into: Application(
+                  into: Variable(StringID("z0")),
+                  sub: Variable(StringID("z1")),
+                ),
+                sub: Variable(StringID("false")),
+              ),
+            ),
+          ),
+        ),
+        #(
+          "true",
+          Lambda(
+            id: StringID("x0"),
+            body: Lambda(id: StringID("x1"), body: Variable(StringID("x0"))),
+          ),
+        ),
+        #(
+          "false",
+          Lambda(
+            id: StringID("y0"),
+            body: Lambda(id: StringID("y1"), body: Variable(StringID("y1"))),
+          ),
+        ),
+      ],
+    )
+  lamb3 |> to_string |> io.println
+  lamb3
+  |> try_reduce_fully(None, Both)
+  |> result.unwrap_both
+  |> to_string
+  //|> io.println
 
   Nil
+}
+
+fn do_wrap(
+  around term: LambdaTerm,
+  with definitions: List(#(String, LambdaTerm)),
+) -> LambdaTerm {
+  do_wrap_lambdas(term:, lams: definitions, apps: [])
+}
+
+fn do_wrap_lambdas(
+  term term: LambdaTerm,
+  lams lams: List(#(String, LambdaTerm)),
+  apps apps: List(LambdaTerm),
+) -> LambdaTerm {
+  case lams {
+    [#(str_id, lambda), ..rest] ->
+      do_wrap_lambdas(
+        term: Lambda(id: StringID(str_id), body: term),
+        lams: rest,
+        apps: [lambda, ..apps],
+      )
+    [] -> do_wrap_applications(term:, apps:)
+  }
+}
+
+fn do_wrap_applications(term term: LambdaTerm, apps apps: List(LambdaTerm)) {
+  case apps {
+    [first, ..rest] ->
+      do_wrap_applications(
+        term: Application(into: term, sub: first),
+        apps: rest,
+      )
+    [] -> term
+  }
 }
