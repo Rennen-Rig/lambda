@@ -248,6 +248,7 @@ fn try_reduce_fully_loop(
   visited visited: Set(LambdaTerm),
 ) -> Result(LambdaTerm, LambdaTerm) {
   term |> to_string |> io.println
+  io.println("")
 
   case remaining_tries {
     Some(tries) if tries < 0 -> Error(term)
@@ -319,7 +320,10 @@ pub fn main() -> Nil {
       around: Application(
         into: Application(
           into: Variable(StringID("and")),
-          sub: Variable(StringID("false")),
+          sub: Application(
+            into: Variable(StringID("not")),
+            sub: Variable(StringID("false")),
+          ),
         ),
         sub: Variable(StringID("true")),
       ),
@@ -341,6 +345,19 @@ pub fn main() -> Nil {
           ),
         ),
         #(
+          "not",
+          Lambda(
+            id: StringID("n0"),
+            body: Application(
+              into: Application(
+                into: Variable(StringID("n0")),
+                sub: Variable(StringID("false")),
+              ),
+              sub: Variable(StringID("true")),
+            ),
+          ),
+        ),
+        #(
           "true",
           Lambda(
             id: StringID("x0"),
@@ -356,12 +373,9 @@ pub fn main() -> Nil {
         ),
       ],
     )
-  lamb3 |> to_string |> io.println
+
   lamb3
   |> try_reduce_fully(None, Both)
-  |> result.unwrap_both
-  |> to_string
-  //|> io.println
 
   Nil
 }
