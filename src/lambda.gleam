@@ -317,49 +317,66 @@ pub fn main() -> Nil {
   io.println("Hello from lambda!")
 
   let defs = [
-    #(
-      "true",
+    #("nil", {
+      let i = id.grab_next()
+      Lambda(id: i, body: Variable(i))
+    }),
+    #("true", {
+      let first = id.grab_next()
+      let second = id.grab_next()
+      Lambda(id: first, body: Lambda(id: second, body: Variable(first)))
+    }),
+    #("false", {
+      let first = id.grab_next()
+      let second = id.grab_next()
+      Lambda(id: first, body: Lambda(id: second, body: Variable(second)))
+    }),
+    #("not", {
+      let input = id.grab_next()
       Lambda(
-        id: StringID("x0"),
-        body: Lambda(id: StringID("x1"), body: Variable(StringID("x0"))),
-      ),
-    ),
-    #(
-      "false",
-      Lambda(
-        id: StringID("y0"),
-        body: Lambda(id: StringID("y1"), body: Variable(StringID("y1"))),
-      ),
-    ),
-    #(
-      "not",
-      Lambda(
-        id: StringID("n0"),
+        id: input,
         body: Application(
           into: Application(
-            into: Variable(StringID("n0")),
+            into: Variable(input),
             sub: Variable(StringID("false")),
           ),
           sub: Variable(StringID("true")),
         ),
-      ),
-    ),
-    #(
-      "and",
+      )
+    }),
+    #("and", {
+      let input1 = id.grab_next()
+      let input2 = id.grab_next()
       Lambda(
-        id: StringID("z0"),
+        id: input1,
         body: Lambda(
-          id: StringID("z1"),
+          id: input2,
           body: Application(
-            into: Application(
-              into: Variable(StringID("z0")),
-              sub: Variable(StringID("z1")),
-            ),
+            into: Application(into: Variable(input1), sub: Variable(input2)),
             sub: Variable(StringID("false")),
           ),
         ),
-      ),
-    ),
+      )
+    }),
+    #("make_pair", {
+      let first = id.grab_next()
+      let second = id.grab_next()
+      let selector = id.grab_next()
+
+      Lambda(
+        id: first,
+        body: Lambda(
+          id: second,
+          body: Lambda(
+            id: selector,
+            body: Application(
+              into: Application(into: Variable(selector), sub: Variable(first)),
+              sub: Variable(second),
+            ),
+          ),
+        ),
+      )
+    }),
   ]
 
   let lamb =
@@ -392,6 +409,13 @@ pub fn main() -> Nil {
   lamb2
   |> try_reduce_fully(None, Both)
 
+  Application(
+    into: Application(into: make_number(68), sub: Variable(StringID("not"))),
+    sub: Variable(StringID("false")),
+  )
+  |> do_wrap(with: defs)
+  |> try_reduce_fully(None, Both)
+
   Nil
 }
 
@@ -421,5 +445,37 @@ fn do_wrap_lambdas(
         lams: rest,
       )
     [] -> term
+  }
+}
+
+fn make_number(from n: Int) -> LambdaTerm {
+  let assert True = n >= 0
+    as {
+    "I only know how to make naturals!\n`"
+    <> int.to_string(n)
+    <> "` is not natural`"
+  }
+
+  let f_id = id.grab_next()
+  let x_id = id.grab_next()
+
+  make_number_loop(remaining_loops: n, f_id:, x_id:, acc: Variable(x_id))
+}
+
+fn make_number_loop(
+  remaining_loops remaining_loops: Int,
+  f_id f_id: ID,
+  x_id x_id: ID,
+  acc acc: LambdaTerm,
+) -> LambdaTerm {
+  case remaining_loops {
+    0 -> Lambda(id: f_id, body: Lambda(id: x_id, body: acc))
+    _ ->
+      make_number_loop(
+        remaining_loops: remaining_loops - 1,
+        f_id:,
+        x_id:,
+        acc: Application(into: Variable(f_id), sub: acc),
+      )
   }
 }
