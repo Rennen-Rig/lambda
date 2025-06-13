@@ -321,12 +321,12 @@ pub fn main() -> Nil {
       let i = id.grab_next()
       Lambda(id: i, body: Variable(i))
     }),
-    #("true", {
+    #("True", {
       let first = id.grab_next()
       let second = id.grab_next()
       Lambda(id: first, body: Lambda(id: second, body: Variable(first)))
     }),
-    #("false", {
+    #("False", {
       let first = id.grab_next()
       let second = id.grab_next()
       Lambda(id: first, body: Lambda(id: second, body: Variable(second)))
@@ -338,9 +338,9 @@ pub fn main() -> Nil {
         body: Application(
           into: Application(
             into: Variable(input),
-            sub: Variable(StringID("false")),
+            sub: Variable(StringID("False")),
           ),
-          sub: Variable(StringID("true")),
+          sub: Variable(StringID("True")),
         ),
       )
     }),
@@ -353,12 +353,12 @@ pub fn main() -> Nil {
           id: input2,
           body: Application(
             into: Application(into: Variable(input1), sub: Variable(input2)),
-            sub: Variable(StringID("false")),
+            sub: Variable(StringID("False")),
           ),
         ),
       )
     }),
-    #("make_pair", {
+    #("Pair", {
       let first = id.grab_next()
       let second = id.grab_next()
       let selector = id.grab_next()
@@ -376,6 +376,54 @@ pub fn main() -> Nil {
           ),
         ),
       )
+    }),
+    #("successor", {
+      let n = id.grab_next()
+      let f = id.grab_next()
+      let x = id.grab_next()
+
+      Lambda(
+        id: n,
+        body: Lambda(
+          id: f,
+          body: Lambda(
+            id: x,
+            body: Application(
+              into: Application(into: Variable(n), sub: Variable(f)),
+              sub: Application(into: Variable(f), sub: Variable(x)),
+            ),
+          ),
+        ),
+      )
+    }),
+    #("Error", {
+      Application(
+        into: Variable(StringID("Pair")),
+        sub: Variable(StringID("False")),
+      )
+    }),
+    #("Ok", {
+      Application(
+        into: Variable(StringID("Pair")),
+        sub: Variable(StringID("False")),
+      )
+    }),
+    #("pred_fallible", {
+      let n = id.grab_next()
+      let r = id.grab_next()
+
+      Lambda(
+        id: n,
+        body: Application(
+          into: todo,
+          sub: Application(
+            into: Variable(StringID("fallible_pred")),
+            sub: Variable(n),
+          ),
+        ),
+      )
+
+      todo
     }),
   ]
 
@@ -398,22 +446,10 @@ pub fn main() -> Nil {
   |> try_reduce_fully(None, Both)
 
   let lamb2 =
-    do_wrap(
-      around: Application(
-        into: Variable(StringID("not")),
-        sub: Variable(StringID("true")),
-      ),
-      with: defs,
-    )
+    Application(into: Variable(StringID("successor")), sub: make_number(7))
+    |> do_wrap(with: defs)
 
   lamb2
-  |> try_reduce_fully(None, Both)
-
-  Application(
-    into: Application(into: make_number(68), sub: Variable(StringID("not"))),
-    sub: Variable(StringID("false")),
-  )
-  |> do_wrap(with: defs)
   |> try_reduce_fully(None, Both)
 
   Nil
