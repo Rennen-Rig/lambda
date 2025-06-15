@@ -7,6 +7,7 @@ import gleam/result
 import gleam/set.{type Set}
 import gleam/string
 import internal/id.{type ID, NumericalID, StringID}
+import lap
 
 pub type LambdaTerm {
   Application(into: LambdaTerm, sub: LambdaTerm)
@@ -248,8 +249,8 @@ fn try_reduce_fully_loop(
   strategy strategy: ReductionStrategy,
   visited visited: Set(LambdaTerm),
 ) -> Result(LambdaTerm, LambdaTerm) {
-  term |> to_string |> io.println
-  io.println("")
+  //term |> to_string |> io.println
+  //io.println("")
 
   case remaining_tries {
     Some(tries) if tries < 0 -> Error(term)
@@ -316,8 +317,10 @@ fn id_to_string(id: ID) -> String {
 pub fn main() -> Nil {
   io.println("Hello from lambda!")
 
+  let timer = lap.start_in_milliseconds("make definitions")
+
   let defs = [
-    #("nil", {
+    #("Nil", {
       let i = id.grab_next()
       Lambda(id: i, body: Variable(i))
     }),
@@ -377,6 +380,18 @@ pub fn main() -> Nil {
         ),
       )
     }),
+    #("Error", {
+      Application(
+        into: Variable(StringID("Pair")),
+        sub: Variable(StringID("False")),
+      )
+    }),
+    #("Ok", {
+      Application(
+        into: Variable(StringID("Pair")),
+        sub: Variable(StringID("True")),
+      )
+    }),
     #("successor", {
       let n = id.grab_next()
       let f = id.grab_next()
@@ -396,18 +411,6 @@ pub fn main() -> Nil {
         ),
       )
     }),
-    #("Error", {
-      Application(
-        into: Variable(StringID("Pair")),
-        sub: Variable(StringID("False")),
-      )
-    }),
-    #("Ok", {
-      Application(
-        into: Variable(StringID("Pair")),
-        sub: Variable(StringID("False")),
-      )
-    }),
     #("pred_fallible", {
       let n = id.grab_next()
       let r = id.grab_next()
@@ -415,42 +418,192 @@ pub fn main() -> Nil {
       Lambda(
         id: n,
         body: Application(
-          into: todo,
+          into: Application(
+            into: Variable(n),
+            // for n times, do thing below
+
+            sub: Lambda(
+              // take in r
+              id: r,
+              body: Application(
+                into: Application(
+                  // conditional, based on if r is Ok
+                  into: Application(
+                    into: Variable(r),
+                    sub: Variable(StringID("True")),
+                  ),
+                  // if r is ok, do this
+                  sub: Application(
+                    into: Variable(StringID("Ok")),
+                    sub: Application(
+                      into: Variable(StringID("successor")),
+                      sub: Application(
+                        into: Variable(r),
+                        sub: Variable(StringID("False")),
+                      ),
+                    ),
+                  ),
+                ),
+                // if r is an error, do this
+                sub: Application(
+                  into: Variable(StringID("Ok")),
+                  sub: make_number(0),
+                ),
+              ),
+            ),
+          ),
+          // inital value below
+
           sub: Application(
-            into: Variable(StringID("fallible_pred")),
-            sub: Variable(n),
+            into: Variable(StringID("Error")),
+            sub: Variable(StringID("Nil")),
           ),
         ),
       )
+    }),
+    #("add", {
+      let n = id.grab_next()
+      let m = id.grab_next()
+      let f = id.grab_next()
+      let x = id.grab_next()
 
-      todo
+      Lambda(
+        id: n,
+        body: Lambda(
+          id: m,
+          body: Lambda(
+            id: f,
+            body: Lambda(
+              id: x,
+              body: Application(
+                into: Application(into: Variable(n), sub: Variable(f)),
+                sub: Application(
+                  into: Application(into: Variable(m), sub: Variable(f)),
+                  sub: Variable(x),
+                ),
+              ),
+            ),
+          ),
+        ),
+      )
+    }),
+    #("multiply", {
+      let n = id.grab_next()
+      let m = id.grab_next()
+      let f = id.grab_next()
+
+      Lambda(
+        id: n,
+        body: Lambda(
+          id: m,
+          body: Lambda(
+            id: f,
+            body: Application(
+              into: Variable(n),
+              sub: Application(into: Variable(m), sub: Variable(f)),
+            ),
+          ),
+        ),
+      )
+    }),
+    #("factorial", {
+      let n = id.grab_next()
+      let acc = id.grab_next()
+
+      Lambda(
+        id: n,
+        body: Application(
+          into: Application(
+            into: Application(
+              into: Variable(n),
+              sub: Lambda(
+                id: acc,
+                body: Application(
+                  into: Application(
+                    into: Variable(StringID("Pair")),
+                    sub: Application(
+                      into: Application(
+                        into: Variable(StringID("multiply")),
+                        sub: Application(
+                          into: Variable(acc),
+                          sub: Variable(StringID("True")),
+                        ),
+                      ),
+                      sub: Application(
+                        into: Variable(acc),
+                        sub: Variable(StringID("False")),
+                      ),
+                    ),
+                    // #(old_prod * old_next_index, _)
+                  ),
+                  sub: Application(
+                    into: Variable(StringID("successor")),
+                    sub: Application(
+                      into: Variable(acc),
+                      sub: Variable(StringID("False")),
+                    ),
+                  ),
+                  // #(_, succ(old_next_index))
+                ),
+              ),
+            ),
+            sub: Application(
+              into: Application(
+                into: Variable(StringID("Pair")),
+                sub: make_number(1),
+              ),
+              sub: make_number(1),
+            ),
+            // sub in starting val of #(1, 1) for #(product, next_index)
+          ),
+          sub: Variable(StringID("True")),
+        ),
+      )
     }),
   ]
 
-  let lamb =
-    do_wrap(
-      around: Application(
+  let timer = timer |> lap.time("create term")
+
+  let lamb3 =
+    Lambda(
+      id: StringID("x"),
+      body: Application(
         into: Application(
-          into: Variable(StringID("and")),
-          sub: Application(
-            into: Variable(StringID("not")),
-            sub: Variable(StringID("false")),
-          ),
+          into: Variable(StringID("pred_fallible")),
+          sub: Variable(StringID("x")),
         ),
-        sub: Variable(StringID("true")),
+        sub: Variable(StringID("False")),
       ),
-      with: defs,
     )
-
-  lamb
-  |> try_reduce_fully(None, Both)
-
-  let lamb2 =
-    Application(into: Variable(StringID("successor")), sub: make_number(7))
     |> do_wrap(with: defs)
 
-  lamb2
-  |> try_reduce_fully(None, Both)
+  let timer = timer |> lap.time("reduce term")
+
+  let reduced =
+    lamb3
+    |> try_reduce_fully(None, Both)
+    |> result.unwrap_both
+
+  io.println("\nReduced to")
+  reduced
+  |> to_string
+  |> io.println
+
+  io.println("\nLikely more readable as")
+  reduced
+  |> make_basic
+  |> to_string
+  |> io.println
+
+  reduced
+  |> try_interpret_number
+  |> result.map(fn(x) {
+    io.println("\nInterpretted as number: " <> int.to_string(x))
+  })
+  |> result.map_error(fn(_) { io.println("Failed to interpret as a number") })
+
+  let timer = timer |> lap.time("end")
+  timer |> lap.sort_max |> lap.pretty_print |> io.println
 
   Nil
 }
@@ -513,5 +666,27 @@ fn make_number_loop(
         x_id:,
         acc: Application(into: Variable(f_id), sub: acc),
       )
+  }
+}
+
+fn try_interpret_number(from term: LambdaTerm) -> Result(Int, Nil) {
+  case term {
+    Lambda(id: f, body: Lambda(id: x, body: rest)) ->
+      try_interpret_number_loop(from: rest, f:, x:, acc: 0)
+    _ -> Error(Nil)
+  }
+}
+
+fn try_interpret_number_loop(
+  from term: LambdaTerm,
+  f f: ID,
+  x x: ID,
+  acc acc: Int,
+) -> Result(Int, Nil) {
+  case term {
+    Application(into: Variable(id:), sub: rest) if id == f ->
+      try_interpret_number_loop(from: rest, f:, x:, acc: acc + 1)
+    Variable(id:) if id == x -> Ok(acc)
+    _ -> Error(Nil)
   }
 }
